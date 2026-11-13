@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   GATE_FALLBACK_QUESTIONS,
   validateOptions,
@@ -8,7 +8,9 @@ import {
   type DecisionInput,
 } from "@snap/shared";
 import { api, ApiError } from "./api";
-import { deleteDecision, saveDecision, updateDecision } from "./db";
+import { deleteDecision, findRegretCandidate, saveDecision, updateDecision } from "./db";
+import { History } from "./screens/History";
+import { RegretCard } from "./screens/RegretCard";
 import { Ask, EMPTY_DRAFT, type Draft } from "./screens/Ask";
 import { Clarify } from "./screens/Clarify";
 import { Crisis } from "./screens/Crisis";
@@ -26,6 +28,7 @@ type View =
   | { name: "resolve" }
   | { name: "gate" }
   | { name: "crisis" }
+  | { name: "history" }
   | { name: "error"; message: string };
 
 type Settled<T> = { ok: true; value: T; ms: number } | { ok: false; error: unknown };
@@ -71,6 +74,27 @@ export default function App() {
   /** Bumped whenever a flow starts or is abandoned, so late responses are dropped. */
   const run = useRef(0);
   const saved = useRef(new Set<string>());
+  const [regret, setRegret] = useState<{ decision: Decision; now: number } | null>(null);
+
+  // Regret check: looked up once per app open, so at most one card is ever shown.
+  useEffect(() => {
+    let live = true;
+    const now = Date.now();
+    findRegretCandidate(now)
+      .then((due) => {
+        if (live && due) setRegret({ decision: due, now });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  function answerRegret(answer: NonNullable<Decision["regret"]>) {
+    if (!regret) return;
+    void updateDecision(regret.decision.id, { regret: answer }).catch(() => undefined);
+    setRegret(null);
+  }
 
   function persist(record: Decision) {
     saved.current.add(record.id);
@@ -253,6 +277,18 @@ export default function App() {
         <Ask
           draft={draft}
           error={formError}
+          top={
+            regret ? <RegretCard decision={regret.decision} now={regret.now} onAnswer={answerRegret} /> : null
+          }
+          headerAction={
+            <button
+              type="button"
+              onClick={() => setView({ name: "history" })}
+              className="min-h-11 px-1 text-base font-semibold text-mute active:text-fg"
+            >
+              History
+            </button>
+          }
           onChange={(next) => {
             setDraft(next);
             setFormError(null);
@@ -302,6 +338,8 @@ export default function App() {
       return <Gate questions={gateQuestions} onNew={reset} />;
     case "crisis":
       return <Crisis onNew={reset} />;
+    case "history":
+      return <History onBack={() => setView({ name: "ask" })} />;
     case "error":
       return (
         <Screen
