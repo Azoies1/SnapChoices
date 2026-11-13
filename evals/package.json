@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "eval": "tsx run.ts"
+    "eval": "tsx run.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@snap/shared": "*"
