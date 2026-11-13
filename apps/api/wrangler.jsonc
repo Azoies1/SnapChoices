@@ -1,0 +1,11 @@
+{
+  "name": "snap-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "vars": {
+    // mock | clef | openai. Real providers arrive in milestone 5.
+    "DECISION_PROVIDER": "mock",
+    // mock | claude
+    "TEXT_PROVIDER": "mock"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@snap/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "eval": "tsx run.ts"
+  },
+  "dependencies": {
+    "@snap/shared": "*"
+  }
+}
