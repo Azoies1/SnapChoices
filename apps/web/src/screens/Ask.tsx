@@ -105,7 +105,7 @@ export function Ask({
             className={`${FIELD} mt-2 text-base`}
             value={draft.context}
             onChange={(e) => onChange({ ...draft, context: e.target.value })}
-            placeholder="Context, optional: dinner tonight, on a budget"
+            placeholder="Optional: dinner tonight, on a budget"
             aria-label="Context (optional)"
             maxLength={MAX_CONTEXT_LENGTH}
             autoComplete="off"

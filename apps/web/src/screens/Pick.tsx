@@ -3,12 +3,18 @@ import { Button, Centered, Screen } from "../ui";
 
 export type ReasonState = "idle" | "loading" | "error";
 
-/** Big enough to read at arm's length, stepping down as the option gets longer. */
+/**
+ * Big enough to read at arm's length, stepping down as the option gets longer.
+ * The longest word matters as much as the total: at 375 px a 10-letter word in
+ * text-6xl does not fit on one line and would be split mid-word.
+ */
 export function pickSize(text: string): string {
-  if (text.length <= 10) return "text-7xl";
-  if (text.length <= 20) return "text-6xl";
-  if (text.length <= 40) return "text-5xl";
-  return "text-4xl";
+  const longestWord = Math.max(0, ...text.split(/\s+/).map((w) => w.length));
+  if (text.length <= 10 && longestWord <= 6) return "text-7xl";
+  if (text.length <= 20 && longestWord <= 8) return "text-6xl";
+  if (text.length <= 40 && longestWord <= 11) return "text-5xl";
+  if (longestWord <= 14) return "text-4xl";
+  return "text-3xl";
 }
 
 export function Pick({
