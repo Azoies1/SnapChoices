@@ -8,8 +8,9 @@ import {
   type DecisionInput,
 } from "@snap/shared";
 import { api, ApiError } from "./api";
-import { saveDecision, updateDecision } from "./db";
+import { deleteDecision, saveDecision, updateDecision } from "./db";
 import { Ask, EMPTY_DRAFT, type Draft } from "./screens/Ask";
+import { Clarify } from "./screens/Clarify";
 import { Crisis } from "./screens/Crisis";
 import { Gate } from "./screens/Gate";
 import { Pick, SwitchPrompt, type ReasonState } from "./screens/Pick";
@@ -19,6 +20,7 @@ import { Button, Centered, Screen } from "./ui";
 type View =
   | { name: "ask" }
   | { name: "loading" }
+  | { name: "clarify"; question: string; answers: string[] }
   | { name: "pick" }
   | { name: "switch" }
   | { name: "resolve" }
@@ -83,8 +85,10 @@ export default function App() {
   }
 
   /** Crisis: no pick, no gate questions, and the decision is dropped rather than saved. */
-  function showCrisis() {
+  function showCrisis(id?: string) {
     run.current++;
+    // If the crisis only surfaced after this decision was written, remove it again.
+    if (id && saved.current.delete(id)) void deleteDecision(id).catch(() => undefined);
     setDecision(null);
     setDraft(EMPTY_DRAFT);
     setView({ name: "crisis" });
@@ -92,16 +96,29 @@ export default function App() {
 
   function showGate(record: Decision) {
     const gated: Decision = { ...record, tier: "gated" };
+    const token = ++run.current;
     setDecision(gated);
     persist(gated);
-    setGateQuestions(GATE_FALLBACK_QUESTIONS);
+    setGateQuestions(null);
     setView({ name: "gate" });
+
+    void settle(api.explain({ ...inputOf(gated), mode: "gate" })).then((asked) => {
+      if (token !== run.current) return;
+      if (asked.ok && asked.value.mode === "gate") {
+        setGateQuestions(asked.value.questions);
+      } else if (!asked.ok && asked.error instanceof ApiError && asked.error.code === "crisis") {
+        showCrisis(gated.id);
+      } else {
+        // The gate screen never depends on the network for its questions.
+        setGateQuestions(GATE_FALLBACK_QUESTIONS);
+      }
+    });
   }
 
   /** Handles any failed request. A 422 is the Worker refusing to pick. */
   function fail(error: unknown, record: Decision) {
     if (error instanceof ApiError && error.status === 422) {
-      if (error.code === "crisis") showCrisis();
+      if (error.code === "crisis") showCrisis(record.id);
       else showGate(record);
       return;
     }
@@ -151,16 +168,49 @@ export default function App() {
     record = { ...record, tier: classification.tier, timings: { classifyMs: classifying.ms } };
     if (classification.tier === "gated") return showGate(record);
 
+    if (classification.tier !== "small") {
+      // Medium and big: one clarifying question first. The speculative pick is thrown away.
+      const asked = await settle(api.explain({ ...input, mode: "question" }));
+      if (token !== run.current) return;
+      if (asked.ok && asked.value.mode === "question") {
+        setDecision(record);
+        setView({ name: "clarify", question: asked.value.question, answers: asked.value.answers });
+        return;
+      }
+      if (!asked.ok && asked.error instanceof ApiError && asked.error.status === 422) {
+        return fail(asked.error, record);
+      }
+      // The question could not be fetched: fall through to the pick made without it.
+    }
+
     const decided = await deciding;
     if (token !== run.current) return;
     if (!decided.ok) return fail(decided.error, record);
-    setDecision(withPick(record, decided.value, decided.ms));
+    const picked = withPick(record, decided.value, decided.ms);
+    setDecision(picked);
     setView({ name: "pick" });
+    if (picked.tier !== "small") void why(picked);
   }
 
-  async function why() {
-    if (!decision?.pick) return;
-    const current = decision;
+  /** Medium flow, second half: decide with the answer appended, then fetch the reason. */
+  async function answer(question: string, answers: string[], chosen: string) {
+    if (!decision) return;
+    const record: Decision = { ...decision, clarifier: { question, answers, chosen } };
+    const token = ++run.current;
+    setDecision(record);
+    setView({ name: "loading" });
+
+    const decided = await settle(api.decide(inputOf(record)));
+    if (token !== run.current) return;
+    if (!decided.ok) return fail(decided.error, record);
+    const picked = withPick(record, decided.value, decided.ms);
+    setDecision(picked);
+    setView({ name: "pick" });
+    void why(picked);
+  }
+
+  async function why(current: Decision | null = decision) {
+    if (!current?.pick) return;
     const token = run.current;
     setReasonState("loading");
     const explained = await settle(api.explain({ ...inputOf(current), mode: "reason", pick: current.pick! }));
@@ -219,6 +269,14 @@ export default function App() {
             </p>
           </Centered>
         </Screen>
+      );
+    case "clarify":
+      return (
+        <Clarify
+          question={view.question}
+          answers={view.answers}
+          onAnswer={(chosen) => void answer(view.question, view.answers, chosen)}
+        />
       );
     case "pick":
       return decision ? (

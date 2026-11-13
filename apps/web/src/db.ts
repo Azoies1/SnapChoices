@@ -61,6 +61,12 @@ export function updateDecision(id: string, change: Partial<Decision>): Promise<v
   });
 }
 
+export function deleteDecision(id: string): Promise<void> {
+  return enqueue(async () => {
+    await run("readwrite", (store) => store.delete(id));
+  });
+}
+
 export async function listDecisions(): Promise<Decision[]> {
   const all = await run<Decision[]>("readonly", (store) => store.getAll());
   return all.sort((a, b) => b.createdAt - a.createdAt);
