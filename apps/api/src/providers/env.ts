@@ -24,4 +24,9 @@ export type Env = {
   JEV_API_KEY?: string;
   JEV_BASE_URL?: string;
   JEV_MODEL?: string;
+
+  /** Secret. A Google AI Studio key for the Decisions API. */
+  GEMINI_API_KEY?: string;
+  /** Default "gemini-decision-1". */
+  GEMINI_MODEL?: string;
 };

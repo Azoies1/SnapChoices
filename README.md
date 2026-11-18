@@ -40,13 +40,14 @@ bun run dev
 
 ## Decision providers
 
-Set `DECISION_PROVIDER` to `mock` (default), `clef` or `jev`. Only the Worker holds a key.
+Set `DECISION_PROVIDER` to `mock` (default), `clef`, `jev` or `gemini`. Only the Worker holds a key.
 
 | Provider | Run | Needs |
 | --- | --- | --- |
 | `mock` | `bun run dev` | nothing |
 | `clef` | `bun run --filter @snap/api dev:clef` | Cloudflare login (Workers AI binding, runs remotely) |
 | `jev` | `DECISION_PROVIDER=jev` + `JEV_API_KEY` in `apps/api/.dev.vars` | TypeSafe or OpenRouter key |
+| `gemini` | `DECISION_PROVIDER=gemini` + `GEMINI_API_KEY` in `apps/api/.dev.vars` | Google AI Studio key (never called live) |
 
 | Variable | Use |
 | --- | --- |

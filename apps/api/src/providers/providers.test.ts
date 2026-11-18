@@ -4,6 +4,7 @@ import { classify } from "../classify";
 import { post } from "../test/helpers";
 import { clefProvider } from "./clef";
 import { decisionProviders, getDecisionProvider } from "./index";
+import { geminiProvider } from "./gemini";
 import { jevProvider } from "./jev";
 import { CLEF_FROM_SCHEMA, JEV_RECORDED } from "./systemOne/fixtures";
 import {
@@ -11,6 +12,7 @@ import {
   aiBindingTransport,
   cloudflareRestTransport,
   createSystemOneProvider,
+  geminiTransport,
   httpSystemOneProvider,
   httpTransport,
   type Transport,
@@ -184,15 +186,57 @@ describe("jevProvider", () => {
   });
 });
 
+describe("geminiProvider", () => {
+  it("needs a key", () => {
+    expect(() => geminiProvider({})).toThrow(/GEMINI_API_KEY/);
+  });
+
+  it("sends Google's body shape with the key header and decodes the answers", async () => {
+    const real = globalThis.fetch;
+    let sent: { url: string; headers: Record<string, string>; body: Record<string, unknown> } | undefined;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      sent = { url, headers: init.headers as Record<string, string>, body: JSON.parse(init.body as string) };
+      return json({
+        answers: {
+          crisis: { type: "noul", noul: 0.03, confidence: 0.97 },
+          pick: { type: "choice", choice: "sushi", confidence: 0.7, probabilities: { pizza: 0.3, sushi: 0.7 } },
+        },
+        usage: { total_output_tokens: 0 },
+      });
+    }) as typeof fetch;
+    try {
+      const answers = await geminiProvider({ GEMINI_API_KEY: "k" }).decide("s", [crisis, pick]);
+      expect(answers.find((a) => a.id === "pick")!.probabilities).toEqual({ pizza: 0.3, sushi: 0.7 });
+    } finally {
+      globalThis.fetch = real;
+    }
+    expect(sent!.url).toBe("https://generativelanguage.googleapis.com/v1beta/decisions");
+    expect(sent!.headers["x-goog-api-key"]).toBe("k");
+    expect(sent!.body).toEqual({
+      model: "gemini-decision-1",
+      input: "s",
+      questions: {
+        crisis: { type: "noul", instructions: "Harm?" },
+        pick: { type: "choice", instructions: "Which?", criteria: { pizza: "", sushi: "" } },
+      },
+    });
+  });
+
+  it("maps an http failure to a generic error", async () => {
+    const transport = geminiTransport({ url: "https://h.test", apiKey: "k", fetch: async () => json({}, 400) });
+    expect(await codeOf(transport({ model: "m", state: "s", questions: {} }, new AbortController().signal))).toBe("http");
+  });
+});
+
 describe("registry", () => {
-  it("lists mock, clef and jev, and selects by name", () => {
-    expect(Object.keys(decisionProviders).sort()).toEqual(["clef", "jev", "mock"]);
+  it("lists mock, clef, jev and gemini, and selects by name", () => {
+    expect(Object.keys(decisionProviders).sort()).toEqual(["clef", "gemini", "jev", "mock"]);
     expect(getDecisionProvider({}).name).toBe("mock");
     expect(getDecisionProvider({ DECISION_PROVIDER: "jev", JEV_API_KEY: "k" }).name).toBe("jev");
   });
 
   it("rejects an unknown name, including inherited object keys", () => {
-    expect(() => getDecisionProvider({ DECISION_PROVIDER: "nope" })).toThrow(/Known: mock, clef, jev/);
+    expect(() => getDecisionProvider({ DECISION_PROVIDER: "nope" })).toThrow(/Known: mock, clef, jev, gemini/);
     expect(() => getDecisionProvider({ DECISION_PROVIDER: "constructor" })).toThrow(/Unknown/);
   });
 

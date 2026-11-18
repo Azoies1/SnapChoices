@@ -55,6 +55,33 @@ export function cloudflareRestTransport(options: {
   };
 }
 
+/**
+ * Google's Decisions API. Same answers as System One, different request:
+ * `state` is called `input`, the key is the `x-goog-api-key` header, and a
+ * choice's criteria map option to a description (empty here, not null).
+ */
+export function geminiTransport(options: { url: string; apiKey: string; fetch?: FetchLike }): Transport {
+  const f = options.fetch ?? defaultFetch;
+  return async (request, signal) => {
+    const questions = Object.fromEntries(
+      Object.entries(request.questions).map(([id, q]) => [
+        id,
+        q.type === "noul"
+          ? q
+          : { ...q, criteria: Object.fromEntries(Object.keys(q.criteria).map((o) => [o, ""])) },
+      ]),
+    );
+    const res = await f(options.url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": options.apiKey },
+      body: JSON.stringify({ model: request.model, input: request.state, questions }),
+      signal,
+    });
+    if (!res.ok) throw new ProviderError("http", `The provider returned ${res.status}.`);
+    return readJson(res);
+  };
+}
+
 /** Any host that takes the System One body over HTTPS with a bearer key: TypeSafe, OpenRouter, other gateways. */
 export function httpTransport(options: { url: string; apiKey: string; fetch?: FetchLike }): Transport {
   const f = options.fetch ?? defaultFetch;

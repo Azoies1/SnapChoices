@@ -2,6 +2,7 @@ import type { DecisionProvider } from "@snap/shared";
 import type { TextProvider } from "../explain";
 import { clefProvider } from "./clef";
 import type { Env } from "./env";
+import { geminiProvider } from "./gemini";
 import { jevProvider } from "./jev";
 import { mockDecisionProvider } from "./mockDecision";
 import { mockTextProvider } from "./mockText";
@@ -21,6 +22,7 @@ export const decisionProviders: Record<string, Factory<DecisionProvider>> = {
   mock: () => mockDecisionProvider,
   clef: clefProvider,
   jev: jevProvider,
+  gemini: geminiProvider,
 };
 
 /** Text models for reasons, clarifying questions and gate questions. Claude Haiku joins in milestone 5. */
