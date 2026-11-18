@@ -2,7 +2,7 @@
 
 A mobile-first web app that makes a pick for an indecisive person. Enter 2 to 4 options, get one pick with a confidence figure, react to it.
 
-**Status:** milestones 0 to 4 of the build brief are done and run on the mock provider. No API keys are needed yet. Milestone 5 (real providers) needs keys; milestone 6 is the PWA shell and deploy.
+**Status:** milestones 0 to 4 of the build brief are done and run on the mock provider. The Clef and Jev adapters are built and tested against recorded and documented responses, but have not yet called a live service. Milestone 5 is the live run and the eval; milestone 6 is the PWA shell and deploy.
 
 ## Run it
 
@@ -33,6 +33,24 @@ npm run lint
 ```bash
 npm run eval
 ```
+
+## Choosing a decision model
+
+Set `DECISION_PROVIDER` to `mock` (default), `clef` or `jev`. Only the Worker ever holds a key.
+
+| Provider | How to run it | Needs |
+| --- | --- | --- |
+| `mock` | `npm run dev` | nothing |
+| `clef` | `npm run dev:clef -w @snap/api` (Workers AI binding, runs remotely) | a Cloudflare login |
+| `jev` | `DECISION_PROVIDER=jev` and `JEV_API_KEY` in `apps/api/.dev.vars` (see `.dev.vars.example`) | a TypeSafe or OpenRouter key |
+
+To run the eval against a real model:
+
+```bash
+DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... npm run eval
+```
+
+The last section of [DECISIONS.md](DECISIONS.md) explains how to add another provider.
 
 ## What the mock provider does
 

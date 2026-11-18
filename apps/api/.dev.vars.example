@@ -1,0 +1,4 @@
+DECISION_PROVIDER=jev
+JEV_API_KEY=replace-me
+# JEV_BASE_URL=https://openrouter.ai/api/alpha/decisions
+# JEV_MODEL=typesafe/jev-1.14

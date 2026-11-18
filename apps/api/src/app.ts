@@ -4,7 +4,7 @@ import { classify } from "./classify";
 import { pickOption } from "./decide";
 import { explainGate, explainQuestion, explainReason, type TextProvider } from "./explain";
 import { parseInput } from "./input";
-import { getDecisionProvider, getTextProvider, type Env } from "./providers";
+import { ProviderError, getDecisionProvider, getTextProvider, type Env } from "./providers";
 
 export type Deps = {
   /** Override the providers chosen by the environment. Used by tests. */
@@ -102,7 +102,14 @@ export function createApp(deps: Deps = {}) {
   });
 
   // Privacy rule: never log request bodies or model output. Errors report a code only.
-  app.onError((_err, c) => c.json({ error: "internal" }, 500));
+  app.onError((err, c) => {
+    if (err instanceof ProviderError && err.code === "config") {
+      // Config messages name settings, never user data, so they are safe to log and help the operator.
+      console.error(err.message);
+      return c.json({ error: "misconfigured" }, 500);
+    }
+    return c.json({ error: "internal" }, 500);
+  });
   app.notFound((c) => c.json({ error: "not_found" }, 404));
 
   return app;

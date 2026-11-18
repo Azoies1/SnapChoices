@@ -13,8 +13,18 @@ import { EVAL_SET, type EvalCase } from "./set";
 
 type Outcome = "small" | "medium" | "big" | "gated" | "crisis" | "error";
 
-const providerName = process.env.DECISION_PROVIDER ?? "mock";
-const provider = getDecisionProvider({ DECISION_PROVIDER: providerName });
+const e = process.env;
+const providerName = e.DECISION_PROVIDER ?? "mock";
+// Outside a Worker there is no AI binding, so Clef uses Cloudflare's REST API with these credentials.
+const provider = getDecisionProvider({
+  DECISION_PROVIDER: providerName,
+  ...(e.CLEF_MODEL ? { CLEF_MODEL: e.CLEF_MODEL } : {}),
+  ...(e.CLOUDFLARE_ACCOUNT_ID ? { CLOUDFLARE_ACCOUNT_ID: e.CLOUDFLARE_ACCOUNT_ID } : {}),
+  ...(e.CLOUDFLARE_API_TOKEN ? { CLOUDFLARE_API_TOKEN: e.CLOUDFLARE_API_TOKEN } : {}),
+  ...(e.JEV_API_KEY ? { JEV_API_KEY: e.JEV_API_KEY } : {}),
+  ...(e.JEV_BASE_URL ? { JEV_BASE_URL: e.JEV_BASE_URL } : {}),
+  ...(e.JEV_MODEL ? { JEV_MODEL: e.JEV_MODEL } : {}),
+});
 
 async function outcomeOf(example: EvalCase): Promise<Outcome> {
   try {

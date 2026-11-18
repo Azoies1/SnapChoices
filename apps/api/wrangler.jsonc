@@ -3,9 +3,29 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "vars": {
-    // mock | clef | openai. Real providers arrive in milestone 5.
+    // mock | clef | jev. See decisionProviders in src/providers/index.ts.
     "DECISION_PROVIDER": "mock",
-    // mock | claude
+    // mock for now. Claude Haiku joins in milestone 5.
     "TEXT_PROVIDER": "mock"
+  },
+
+  // Local development and the default deploy use the mock and need no account.
+  // `npm run dev:clef` and `npm run deploy:clef` select this environment, which
+  // adds the Workers AI binding. Workers AI always runs remotely, so wrangler
+  // asks you to log in the first time.
+  "env": {
+    "cloudflare": {
+      "name": "snap-api",
+      "ai": { "binding": "AI" },
+      "vars": {
+        "DECISION_PROVIDER": "clef",
+        "TEXT_PROVIDER": "mock",
+        "CLEF_MODEL": "clef-flash"
+      }
+    }
   }
+
+  // Jev (or any gateway) needs no binding. Set DECISION_PROVIDER=jev and add the
+  // key with: wrangler secret put JEV_API_KEY
+  // Optional: JEV_BASE_URL and JEV_MODEL (see src/providers/jev.ts).
 }

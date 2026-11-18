@@ -44,3 +44,35 @@ Each default taken and each place the build departs from the brief, with the rea
 | Eval script fails the build on one gated or crisis miss | True for real providers. On the mock it reports misses without failing | The mock classifies by keyword only, so its misses measure the backstop alone (currently 11 of 20 caught). The remaining 9 are the model's job and are the M5 gate. |
 | Keyboard opens on the first field | `autoFocus` on the first field | iOS Safari only opens the keyboard after a user gesture; no web app can force it. |
 | First-run notice, PWA manifest, rate limit, AI Gateway | Not built yet | They belong to milestones 5 and 6. |
+
+## Decision providers: Clef and Jev (added after M4)
+
+| Brief | Build | Reason |
+| --- | --- | --- |
+| Adapters for Clef and OpenAI | Adapters for **Clef** and **Jev**; no OpenAI adapter | Thomas's call: run fully on Cloudflare Clef, with Jev as the switch. OpenAI's Decisions API can be added the same way (see below). |
+| One adapter per provider | One shared System One codec, plus a transport per host | Clef and Jev take and return the same body (`state` plus typed `questions` in, typed `answers` out), so the only differences are where the request goes and how it authenticates. |
+| Request shapes read from provider docs | Read from Cloudflare's published clef-flash input and output JSON schemas and TypeSafe's quickstart | Done. Jev's decode test uses a real response captured in OpenRouter's tutorial. **The Clef test response was written from the output schema** because the docs show no example; replace it with a real recording at first use. |
+| Clef price "not found" | $0.038 per million input tokens, output free, 24,576-token context | From Cloudflare's model page. |
+| Question ids | Same ids as before: `crisis`, `tier`, `pick` | They satisfy Clef's id pattern (letters, digits, `_ . -`). |
+| Choice options | The user's own text is the option key, with no description | That is what both APIs return probabilities for, and the tier question carries its descriptions in `instructions`. Duplicate options were already rejected case-insensitively. |
+| Yes/no answers | A `noul` question returns P(yes); the adapter reports `{ yes: p, no: 1 - p }` | Matches the provider interface in the brief. |
+| Missing or malformed answers | A question the provider skips is left out; a present but invalid answer throws | Callers already treat both as a failed classification, so neither can produce a pick. Out-of-range or non-numeric probabilities are never repaired. |
+| Timeouts | 8 seconds per provider call, then a generic timeout error | Not in the brief. A hung provider must not hold a decision open; the client shows a retry. |
+| Key hygiene | A bearer key is only sent over https (or to localhost in tests); errors carry a code and a generic message, never request or response text | Privacy rule: the Worker must not log option text, context or model output. |
+| Misconfiguration | A missing key, binding or bad setting returns 500 `misconfigured` and logs only the setting's name | Distinguishes an operator mistake from a provider outage. |
+
+**Choosing a provider**
+
+- `DECISION_PROVIDER=mock | clef | jev`. The registry is `decisionProviders` in `apps/api/src/providers/index.ts`.
+- Clef inside a Worker uses the Workers AI binding (the `cloudflare` wrangler environment: `npm run dev:clef -w @snap/api`). Outside a Worker, such as the eval script, it uses Cloudflare's REST API with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. `CLEF_MODEL` picks `clef-flash` (default) or `clef`.
+- Jev needs `JEV_API_KEY`. It defaults to TypeSafe's endpoint and model `jev-latest`; set `JEV_BASE_URL` and `JEV_MODEL` to go through a gateway such as OpenRouter.
+- The default model id `jev-latest` and the TypeSafe endpoint come from TypeSafe's quickstart. For classification that gates life decisions, **pin a dated version** (for example `jev-1.14`) once chosen, so a model update cannot change behaviour silently.
+
+**Adding another decision model**
+
+1. If it accepts the System One body over HTTPS with a bearer key (OpenAI's Decisions API is a likely candidate): write a factory that calls `httpSystemOneProvider({ name, url, apiKey, model })`, as `jev.ts` does.
+2. If its host works differently: write a `Transport` (a function from the request to parsed JSON) and pass it to `createSystemOneProvider`.
+3. If it speaks a different wire format: write a codec beside `systemOne/wire.ts` and a factory that returns a `DecisionProvider`.
+4. List the factory in `decisionProviders`, add its variables to `env.ts`, and run `npm run eval`.
+
+Not yet verified against live services: no request has been sent to Cloudflare or TypeSafe. The first real run happens at milestone 5.
