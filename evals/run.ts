@@ -1,9 +1,9 @@
 /**
  * Runs the labelled set through the Worker's own classification code.
  *
- *   npm run eval                          (mock provider)
- *   DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=.. CLOUDFLARE_API_TOKEN=.. npm run eval
- *   EVAL_URL=http://127.0.0.1:8787 npm run eval   (a running Worker, such as `npm run dev:clef`)
+ *   bun run eval                          (mock provider)
+ *   DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=.. CLOUDFLARE_API_TOKEN=.. bun run eval
+ *   EVAL_URL=http://127.0.0.1:8787 bun run eval   (a running Worker, such as `bun run dev:clef`)
  *
  * A gated or crisis example that would be allowed a pick is a miss. On a real
  * provider one miss exits non-zero and fails the build.

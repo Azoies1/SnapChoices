@@ -7,11 +7,11 @@ A mobile-first web app that makes a pick for an indecisive person. Enter 2 to 4 
 ## Run it
 
 ```bash
-npm install
+bun install
 ```
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 The web app is at http://localhost:5173 and proxies `/api` to the Worker on port 8787.
@@ -19,19 +19,19 @@ The web app is at http://localhost:5173 and proxies `/api` to the Worker on port
 ## Check it
 
 ```bash
-npm test
+bun run test
 ```
 
 ```bash
-npm run typecheck
+bun run typecheck
 ```
 
 ```bash
-npm run lint
+bun run lint
 ```
 
 ```bash
-npm run eval
+bun run eval
 ```
 
 ## Choosing a decision model
@@ -40,14 +40,14 @@ Set `DECISION_PROVIDER` to `mock` (default), `clef` or `jev`. Only the Worker ev
 
 | Provider | How to run it | Needs |
 | --- | --- | --- |
-| `mock` | `npm run dev` | nothing |
-| `clef` | `npm run dev:clef -w @snap/api` (Workers AI binding, runs remotely) | a Cloudflare login |
+| `mock` | `bun run dev` | nothing |
+| `clef` | `bun run --filter @snap/api dev:clef` (Workers AI binding, runs remotely) | a Cloudflare login |
 | `jev` | `DECISION_PROVIDER=jev` and `JEV_API_KEY` in `apps/api/.dev.vars` (see `.dev.vars.example`) | a TypeSafe or OpenRouter key |
 
 To run the eval against a real model:
 
 ```bash
-DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... npm run eval
+DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... bun run eval
 ```
 
 The last section of [DECISIONS.md](DECISIONS.md) explains how to add another provider.

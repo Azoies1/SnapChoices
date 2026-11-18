@@ -15,7 +15,7 @@ Each default taken and each place the build departs from the brief, with the rea
 
 | Area | Choice | Reason |
 | --- | --- | --- |
-| Package manager | npm workspaces | pnpm is not installed on the build machine; npm needs nothing extra. |
+| Package manager | Bun workspaces | One tool for install, scripts and the `evals` runner; `bun.lock` is the lockfile. |
 | Tests for the Worker | Vitest in Node, calling the Hono app with `app.request()` | No Workers runtime needed for milestones 0 to 4. Revisit at M5 when the AI binding and rate limiter appear. |
 | Option length | 80 characters per option, 200 for the context line | The brief sets no limit; the Worker needs one. |
 | Duplicate check | Case-insensitive, after trimming and collapsing spaces | "Pizza" and "pizza " are the same option to a person. |
@@ -64,7 +64,7 @@ Each default taken and each place the build departs from the brief, with the rea
 **Choosing a provider**
 
 - `DECISION_PROVIDER=mock | clef | jev`. The registry is `decisionProviders` in `apps/api/src/providers/index.ts`.
-- Clef inside a Worker uses the Workers AI binding (the `cloudflare` wrangler environment: `npm run dev:clef -w @snap/api`). Outside a Worker, such as the eval script, it uses Cloudflare's REST API with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. `CLEF_MODEL` picks `clef-flash` (default) or `clef`.
+- Clef inside a Worker uses the Workers AI binding (the `cloudflare` wrangler environment: `bun run --filter @snap/api dev:clef`). Outside a Worker, such as the eval script, it uses Cloudflare's REST API with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. `CLEF_MODEL` picks `clef-flash` (default) or `clef`.
 - Jev needs `JEV_API_KEY`. It defaults to TypeSafe's endpoint and model `jev-latest`; set `JEV_BASE_URL` and `JEV_MODEL` to go through a gateway such as OpenRouter.
 - The default model id `jev-latest` and the TypeSafe endpoint come from TypeSafe's quickstart. For classification that gates life decisions, **pin a dated version** (for example `jev-1.14`) once chosen, so a model update cannot change behaviour silently.
 
@@ -73,6 +73,6 @@ Each default taken and each place the build departs from the brief, with the rea
 1. If it accepts the System One body over HTTPS with a bearer key (OpenAI's Decisions API is a likely candidate): write a factory that calls `httpSystemOneProvider({ name, url, apiKey, model })`, as `jev.ts` does.
 2. If its host works differently: write a `Transport` (a function from the request to parsed JSON) and pass it to `createSystemOneProvider`.
 3. If it speaks a different wire format: write a codec beside `systemOne/wire.ts` and a factory that returns a `DecisionProvider`.
-4. List the factory in `decisionProviders`, add its variables to `env.ts`, and run `npm run eval`.
+4. List the factory in `decisionProviders`, add its variables to `env.ts`, and run `bun run eval`.
 
 Verified live: Clef-flash through the Workers AI binding (18 Nov 2026). All 20 gated and crisis eval examples received no pick, and tier accuracy on the other 45 was 41/45. Not yet verified live: Jev, the Clef REST transport, and the Clef response shape beyond what the eval exercised (the stored test response is still schema-derived). The first call after `wrangler login` took longer than the 8-second timeout and failed; later calls took 0.3 to 0.6 seconds. `PROVIDER_TIMEOUT_MS` and `DEBUG_PROVIDER_ERRORS` exist for diagnosing that kind of failure and are off by default.

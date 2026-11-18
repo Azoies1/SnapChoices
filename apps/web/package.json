@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@snap/shared": "*",
+    "@snap/shared": "workspace:*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

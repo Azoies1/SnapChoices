@@ -8,21 +8,19 @@
     "evals"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web \"npm run dev -w @snap/api\" \"npm run dev -w @snap/web\"",
-    "build": "npm run build -w @snap/web",
-    "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev": "bun run --filter @snap/api --filter @snap/web dev",
+    "build": "bun run --filter @snap/web build",
+    "test": "bun run --filter '*' test",
+    "typecheck": "bun run --filter '*' typecheck",
     "lint": "eslint .",
-    "eval": "npm run eval -w @snap/evals"
+    "eval": "bun run --filter @snap/evals eval"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
-    "concurrently": "^10.0.7",
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",
-    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"

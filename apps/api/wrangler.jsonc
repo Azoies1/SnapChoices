@@ -10,7 +10,7 @@
   },
 
   // Local development and the default deploy use the mock and need no account.
-  // `npm run dev:clef` and `npm run deploy:clef` select this environment, which
+  // `bun run dev:clef` and `bun run deploy:clef` select this environment, which
   // adds the Workers AI binding. Workers AI always runs remotely, so wrangler
   // asks you to log in the first time.
   "env": {

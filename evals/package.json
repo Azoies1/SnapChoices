@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "eval": "tsx run.ts",
+    "eval": "bun run.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@snap/shared": "*"
+    "@snap/shared": "workspace:*"
   }
 }
