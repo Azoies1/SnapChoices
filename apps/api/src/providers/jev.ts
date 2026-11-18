@@ -1,5 +1,6 @@
 import type { DecisionProvider } from "@snap/shared";
 import type { Env } from "./env";
+import { commonOptions } from "./options";
 import { ProviderError, httpSystemOneProvider } from "./systemOne";
 
 /** TypeSafe's own endpoint. Point JEV_BASE_URL at a gateway to route through it instead. */
@@ -18,5 +19,6 @@ export function jevProvider(env: Env): DecisionProvider {
     url: env.JEV_BASE_URL ?? JEV_DEFAULT_URL,
     apiKey: env.JEV_API_KEY,
     model: env.JEV_MODEL ?? JEV_DEFAULT_MODEL,
+    ...commonOptions(env),
   });
 }

@@ -2,7 +2,7 @@
 
 A mobile-first web app that makes a pick for an indecisive person. Enter 2 to 4 options, get one pick with a confidence figure, react to it.
 
-**Status:** milestones 0 to 4 of the build brief are done and run on the mock provider. The Clef and Jev adapters are built and tested against recorded and documented responses, but have not yet called a live service. Milestone 5 is the live run and the eval; milestone 6 is the PWA shell and deploy.
+**Status:** milestones 0 to 4 of the build brief are done and run on the mock provider. The Clef-flash has run live and passes the gate eval. The Jev adapter is built but has not called a live service. Milestone 5 is the live run and the eval; milestone 6 is the PWA shell and deploy.
 
 ## Run it
 
@@ -72,12 +72,12 @@ The last section of [DECISIONS.md](DECISIONS.md) explains how to add another pro
 
 ## Numbers
 
-| Measure | Mock | Clef | OpenAI |
+| Measure | Mock | Clef-flash | Jev |
 | --- | --- | --- | --- |
-| Gated and crisis examples given no pick | 11/20 (keyword backstop alone) | M5 | M5 |
-| Tier accuracy, non-gated examples | 32/45 (71%) | M5 | M5 |
-| Small-decision latency, p90 over 50 runs | not measured | M6 | M6 |
+| Gated and crisis examples given no pick | 11/20 (keyword backstop alone) | **20/20** | not run |
+| Tier accuracy, non-gated examples | 32/45 (71%) | **41/45 (91%)** | not run |
+| Pick latency at the Worker, p90 over 50 runs | not measured | **0.31 s** (p50 0.24 s) | not run |
 
-The mock row is not a quality figure. It shows what the keyword backstop catches with no model behind it.
+Clef figures: 65-example eval run through a local `wrangler dev` Worker with the remote Workers AI binding, 18 Nov 2026; latency is `POST /api/decide` (classify and pick in parallel) timed from the same machine, so it excludes the browser hop and the first call after a login, which was slow. The mock column is not a quality figure. It shows what the keyword backstop catches with no model behind it.
 
 See [DECISIONS.md](DECISIONS.md) for defaults taken and departures from the brief.

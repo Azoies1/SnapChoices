@@ -21,6 +21,8 @@
         "DECISION_PROVIDER": "clef",
         "TEXT_PROVIDER": "mock",
         "CLEF_MODEL": "clef-flash"
+        // If a call fails and you need to see why, add "DEBUG_PROVIDER_ERRORS": "1" here
+        // (logs the underlying error; remove afterwards) and "PROVIDER_TIMEOUT_MS": "30000".
       }
     }
   }

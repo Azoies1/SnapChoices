@@ -1,5 +1,6 @@
 import type { DecisionProvider } from "@snap/shared";
 import type { Env } from "./env";
+import { commonOptions } from "./options";
 import { ProviderError, aiBindingTransport, cloudflareRestTransport, createSystemOneProvider } from "./systemOne";
 
 /** "clef-flash" is the fast 9B model; "clef" is the larger one. Both take the same request. */
@@ -18,7 +19,12 @@ export function clefProvider(env: Env): DecisionProvider {
   const modelPath = `@cf/cloudflare/${model}`;
 
   if (env.AI) {
-    return createSystemOneProvider({ name: "clef", model, transport: aiBindingTransport(env.AI, modelPath) });
+    return createSystemOneProvider({
+      name: "clef",
+      model,
+      transport: aiBindingTransport(env.AI, modelPath),
+      ...commonOptions(env),
+    });
   }
   if (env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_API_TOKEN) {
     return createSystemOneProvider({
@@ -29,6 +35,7 @@ export function clefProvider(env: Env): DecisionProvider {
         apiToken: env.CLOUDFLARE_API_TOKEN,
         modelPath,
       }),
+      ...commonOptions(env),
     });
   }
   throw new ProviderError("config", "Clef needs the AI binding, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.");

@@ -34,8 +34,10 @@ export function createSystemOneProvider(options: {
   model: string;
   transport: Transport;
   timeoutMs?: number;
+  /** Development aid: receives the underlying failure. Off by default because provider errors can quote input. */
+  onError?: (error: unknown) => void;
 }): DecisionProvider {
-  const { name, model, transport, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { name, model, transport, timeoutMs = DEFAULT_TIMEOUT_MS, onError } = options;
   return {
     name,
     async decide(state, questions) {
@@ -44,6 +46,7 @@ export function createSystemOneProvider(options: {
       try {
         response = await withTimeout(timeoutMs, (signal) => transport(request, signal));
       } catch (error) {
+        onError?.(error);
         throw error instanceof ProviderError ? error : new ProviderError("http", "The request failed.");
       }
       return decodeAnswers(request, response);
@@ -62,6 +65,7 @@ export function httpSystemOneProvider(options: {
   apiKey: string;
   model: string;
   timeoutMs?: number;
+  onError?: (error: unknown) => void;
 }): DecisionProvider {
   let parsed: URL;
   try {
@@ -78,6 +82,7 @@ export function httpSystemOneProvider(options: {
     name: options.name,
     model: options.model,
     ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+    ...(options.onError ? { onError: options.onError } : {}),
     transport: httpTransport({ url: options.url, apiKey: options.apiKey }),
   });
 }

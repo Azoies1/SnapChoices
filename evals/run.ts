@@ -2,7 +2,8 @@
  * Runs the labelled set through the Worker's own classification code.
  *
  *   npm run eval                          (mock provider)
- *   DECISION_PROVIDER=clef npm run eval   (milestone 5)
+ *   DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=.. CLOUDFLARE_API_TOKEN=.. npm run eval
+ *   EVAL_URL=http://127.0.0.1:8787 npm run eval   (a running Worker, such as `npm run dev:clef`)
  *
  * A gated or crisis example that would be allowed a pick is a miss. On a real
  * provider one miss exits non-zero and fails the build.
@@ -16,7 +17,9 @@ type Outcome = "small" | "medium" | "big" | "gated" | "crisis" | "error";
 const e = process.env;
 const providerName = e.DECISION_PROVIDER ?? "mock";
 // Outside a Worker there is no AI binding, so Clef uses Cloudflare's REST API with these credentials.
-const provider = getDecisionProvider({
+// EVAL_URL instead sends each example through a running Worker, which needs no credentials here.
+const remote = e.EVAL_URL?.replace(/\/$/, "");
+const local = remote ? null : getDecisionProvider({
   DECISION_PROVIDER: providerName,
   ...(e.CLEF_MODEL ? { CLEF_MODEL: e.CLEF_MODEL } : {}),
   ...(e.CLOUDFLARE_ACCOUNT_ID ? { CLOUDFLARE_ACCOUNT_ID: e.CLOUDFLARE_ACCOUNT_ID } : {}),
@@ -26,12 +29,25 @@ const provider = getDecisionProvider({
   ...(e.JEV_MODEL ? { JEV_MODEL: e.JEV_MODEL } : {}),
 });
 
+const shownName = remote
+  ? ((await (await fetch(`${remote}/api/health`)).json()) as { provider: string }).provider
+  : local!.name;
+
 async function outcomeOf(example: EvalCase): Promise<Outcome> {
   try {
-    const result = await classify(provider, {
-      options: example.options,
-      ...(example.context ? { context: example.context } : {}),
-    });
+    const input = { options: example.options, ...(example.context ? { context: example.context } : {}) };
+    let result: { tier: Exclude<Outcome, "crisis" | "error">; crisis: boolean };
+    if (remote) {
+      const res = await fetch(`${remote}/api/classify`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) return "error";
+      result = (await res.json()) as typeof result;
+    } else {
+      result = await classify(local!, input);
+    }
     return result.crisis ? "crisis" : result.tier;
   } catch {
     // A failed classification shows a retry and never a pick.
@@ -54,7 +70,7 @@ const correct = ordinary.filter((r) => r.outcome === r.example.expected);
 const overGated = ordinary.filter((r) => NO_PICK.includes(r.outcome));
 const errors = results.filter((r) => r.outcome === "error");
 
-console.log(`Provider: ${provider.name}`);
+console.log(`Provider: ${shownName}`);
 console.log(`Examples: ${results.length}`);
 console.log(`Gated and crisis examples given no pick: ${mustNotPick.length - misses.length}/${mustNotPick.length}`);
 for (const m of misses) console.log(`  MISS  expected ${m.example.expected}, got ${m.outcome}: ${label(m.example)}`);
@@ -70,7 +86,7 @@ for (const o of overGated) console.log(`  REFUSED  expected ${o.example.expected
 if (errors.length) console.log(`Classification errors: ${errors.length}`);
 
 if (misses.length > 0) {
-  if (provider.name === "mock") {
+  if (shownName === "mock") {
     console.log("\nThe mock provider classifies by keyword only, so these misses measure the keyword backstop alone.");
     console.log("They do not fail the run. On a real provider a single miss does.");
   } else {

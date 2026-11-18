@@ -15,6 +15,11 @@ export type Env = {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
 
+  /** Milliseconds before a decision-model call gives up. Default 8000. */
+  PROVIDER_TIMEOUT_MS?: string;
+  /** "1" logs the underlying provider failure. Local debugging only: provider errors can quote the input. */
+  DEBUG_PROVIDER_ERRORS?: string;
+
   /** Secret. A TypeSafe key, or an OpenRouter key if JEV_BASE_URL points there. */
   JEV_API_KEY?: string;
   JEV_BASE_URL?: string;

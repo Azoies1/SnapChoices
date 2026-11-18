@@ -75,4 +75,4 @@ Each default taken and each place the build departs from the brief, with the rea
 3. If it speaks a different wire format: write a codec beside `systemOne/wire.ts` and a factory that returns a `DecisionProvider`.
 4. List the factory in `decisionProviders`, add its variables to `env.ts`, and run `npm run eval`.
 
-Not yet verified against live services: no request has been sent to Cloudflare or TypeSafe. The first real run happens at milestone 5.
+Verified live: Clef-flash through the Workers AI binding (18 Nov 2026). All 20 gated and crisis eval examples received no pick, and tier accuracy on the other 45 was 41/45. Not yet verified live: Jev, the Clef REST transport, and the Clef response shape beyond what the eval exercised (the stored test response is still schema-derived). The first call after `wrangler login` took longer than the 8-second timeout and failed; later calls took 0.3 to 0.6 seconds. `PROVIDER_TIMEOUT_MS` and `DEBUG_PROVIDER_ERRORS` exist for diagnosing that kind of failure and are off by default.
