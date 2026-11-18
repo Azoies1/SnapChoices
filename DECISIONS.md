@@ -8,7 +8,7 @@ Each default taken and each place the build departs from the brief, with the rea
 - Cloudflare Workers backend, no accounts, history on the device.
 - Dark theme, English only.
 - Product name "Snap".
-- Decision model order: Clef-flash first, OpenAI second (both arrive in milestone 5).
+- Decision models: Clef-flash first; Jev replaced OpenAI as the second (see "Decision providers").
 - No voice input.
 
 ## Defaults the brief left open
@@ -42,7 +42,7 @@ Each default taken and each place the build departs from the brief, with the rea
 | Crisis decisions are "not saved to history" | Also: the form is cleared, and a record already written is deleted if the crisis only surfaces later (for example when the Worker refuses a reason) | Same intent, covering the late case. |
 | Gate output "must not favour any option" | Enforced by a check: a gate question that names some options but not all is rejected, then the fixed questions are used | A prompt instruction alone cannot be tested. |
 | Eval set of "at least 60: 15 per tier, including 15 gated and 5 crisis" | 65 examples: 15 per tier plus 5 crisis | The two counts do not fit in 60. |
-| Eval script fails the build on one gated or crisis miss | True for real providers. On the mock it reports misses without failing | The mock classifies by keyword only, so its misses measure the backstop alone (currently 11 of 20 caught). The remaining 9 are the model's job and are the M5 gate. |
+| Eval script fails the build on one gated or crisis miss | True for real providers. On the mock it reports misses without failing | The mock classifies by keyword only, so its misses measure the backstop alone (11 of 20 caught). The rest are the model's job. Set `EVAL_URL` to run the set through a live Worker instead of in-process. |
 | Keyboard opens on the first field | `autoFocus` on the first field | iOS Safari only opens the keyboard after a user gesture; no web app can force it. |
 | First-run notice, PWA manifest, rate limit, AI Gateway | Not built yet | They belong to milestones 5 and 6. |
 

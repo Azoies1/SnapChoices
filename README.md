@@ -1,83 +1,97 @@
 # Snap
 
-A mobile-first web app that makes a pick for an indecisive person. Enter 2 to 4 options, get one pick with a confidence figure, react to it.
+Mobile-first web app that picks for an indecisive person. Enter 2–4 options, get one pick with a confidence figure, react to it, nudge it.
 
-**Status:** milestones 0 to 4 of the build brief are done and run on the mock provider. The Clef-flash has run live and passes the gate eval. The Jev adapter is built but has not called a live service. Milestone 5 is the live run and the eval; milestone 6 is the PWA shell and deploy.
+**Status:** M0–M4 done on the mock provider. Clef-flash verified live (passes the gate eval). Jev adapter built, never called live. Next: M5 (live eval, Haiku text, rate limit), M6 (PWA shell, deploy).
 
-## Run it
+## Quick start
 
 ```bash
 bun install
-```
-
-```bash
 bun run dev
 ```
 
-The web app is at http://localhost:5173 and proxies `/api` to the Worker on port 8787.
+- Web: http://localhost:5173, proxies `/api` to the Worker on `:8787`.
 
-## Check it
+| Command | Does |
+| --- | --- |
+| `bun run test` | Vitest, all workspaces |
+| `bun run typecheck` | `tsc --noEmit`, all workspaces |
+| `bun run lint` | ESLint |
+| `bun run build` | Typecheck + Vite build of the web app |
+| `bun run eval` | Run the labelled set through classification |
 
-```bash
-bun run test
-```
+## How it works
 
-```bash
-bun run typecheck
-```
+- Worker re-classifies every request; client-sent tiers are never trusted.
+- Tiers: **small** (instant pick) · **medium** (one question, pick + reason) · **big** (as medium + "Sleep on it") · **gated** (no pick, three questions) · **crisis** (support screen, never saved).
+- Classify and pick run in parallel; pick is held back until classification passes.
+- Up to 3 free-text nudges re-run the pick; they can only raise the tier, never lower it.
+- History lives on the device (IndexedDB). No accounts.
 
-```bash
-bun run lint
-```
+## API
 
-```bash
-bun run eval
-```
+| Endpoint | Purpose | Refusals |
+| --- | --- | --- |
+| `GET /api/health` | `{ ok, provider }` | none |
+| `POST /api/classify` | Tier + crisis flag | 503 |
+| `POST /api/decide` | Tier, ranking, pick | 422 `gated` / `crisis`, 502, 503 |
+| `POST /api/explain` | `mode`: `reason`, `question` or `gate` | 422, 400, 503 |
 
-## Choosing a decision model
+## Decision providers
 
-Set `DECISION_PROVIDER` to `mock` (default), `clef` or `jev`. Only the Worker ever holds a key.
+Set `DECISION_PROVIDER` to `mock` (default), `clef` or `jev`. Only the Worker holds a key.
 
-| Provider | How to run it | Needs |
+| Provider | Run | Needs |
 | --- | --- | --- |
 | `mock` | `bun run dev` | nothing |
-| `clef` | `bun run --filter @snap/api dev:clef` (Workers AI binding, runs remotely) | a Cloudflare login |
-| `jev` | `DECISION_PROVIDER=jev` and `JEV_API_KEY` in `apps/api/.dev.vars` (see `.dev.vars.example`) | a TypeSafe or OpenRouter key |
+| `clef` | `bun run --filter @snap/api dev:clef` | Cloudflare login (Workers AI binding, runs remotely) |
+| `jev` | `DECISION_PROVIDER=jev` + `JEV_API_KEY` in `apps/api/.dev.vars` | TypeSafe or OpenRouter key |
 
-To run the eval against a real model:
+| Variable | Use |
+| --- | --- |
+| `CLEF_MODEL` | `clef-flash` (default) or `clef` |
+| `JEV_BASE_URL`, `JEV_MODEL` | Point Jev at a gateway; pin a dated model |
+| `PROVIDER_TIMEOUT_MS` | Provider timeout, default 8000 |
+| `DEBUG_PROVIDER_ERRORS=1` | Log underlying errors. Local only: may quote input |
+
+Adding a provider: see the last section of [DECISIONS.md](DECISIONS.md).
+
+## Eval
 
 ```bash
-DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... bun run eval
+bun run eval                                           # mock, in-process
+EVAL_URL=http://127.0.0.1:8787 bun run eval            # through a running Worker (e.g. dev:clef)
+DECISION_PROVIDER=clef CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... bun run eval   # Clef REST
 ```
 
-The last section of [DECISIONS.md](DECISIONS.md) explains how to add another provider.
+- 65 labelled examples: 15 per tier + 5 crisis.
+- One gated/crisis miss fails a real-provider run; mock only reports.
 
-## What the mock provider does
+| Measure | Mock | Clef-flash | Jev |
+| --- | --- | --- | --- |
+| Gated + crisis given no pick | 11/20 (keyword backstop only) | **20/20** | not run |
+| Tier accuracy, non-gated | 32/45 (71%) | **41/45 (91%)** | not run |
+| `/api/decide` latency p90 (50 runs) | n/a | **0.31 s** (p50 0.24 s) | not run |
 
-`DECISION_PROVIDER=mock` (the default in `apps/api/wrangler.jsonc`) picks by a stable hash of the input and classifies by keyword, so the same options always give the same pick. To see each path:
+Clef: run through local `wrangler dev` with remote Workers AI, 18 Nov 2026. Excludes browser hop and first post-login call (slow). Mock column shows the backstop alone, not quality.
 
-| Type this | You get |
+## Try the mock
+
+| Type | Get |
 | --- | --- |
-| `pizza` / `sushi` | Small: an instant pick |
-| `the Sony headphones` / `the Bose headphones` | Medium: one question, then a pick with a reason |
-| `MacBook Air` / `ThinkPad laptop` | Big: as medium, plus "Sleep on it before you commit." |
+| `pizza` / `sushi` | Small: instant pick |
+| `the Sony headphones` / `the Bose headphones` | Medium: one question, pick + reason |
+| `MacBook Air` / `ThinkPad laptop` | Big: as medium + "Sleep on it before you commit." |
 | `quit my job` / `stay` | Gated: no pick, three questions |
 
 ## Layout
 
-- `apps/web` React app (Vite, Tailwind)
-- `apps/api` Cloudflare Worker (Hono): `POST /api/classify`, `/api/decide`, `/api/explain`
-- `packages/shared` types and the tier, gate and close-call rules used by both
-- `evals` the labelled set (`set.ts`) and the script that runs it (`run.ts`)
+| Path | Contents |
+| --- | --- |
+| `apps/web` | React 19, Vite, Tailwind. Screens in `src/screens`, IndexedDB in `db.ts` |
+| `apps/api` | Cloudflare Worker (Hono). Providers in `src/providers`, shared codec in `providers/systemOne` |
+| `packages/shared` | Types, tier/gate/close-call rules, keyword backstops (TS source, no build) |
+| `evals` | Labelled set (`set.ts`) and runner (`run.ts`) |
 
-## Numbers
-
-| Measure | Mock | Clef-flash | Jev |
-| --- | --- | --- | --- |
-| Gated and crisis examples given no pick | 11/20 (keyword backstop alone) | **20/20** | not run |
-| Tier accuracy, non-gated examples | 32/45 (71%) | **41/45 (91%)** | not run |
-| Pick latency at the Worker, p90 over 50 runs | not measured | **0.31 s** (p50 0.24 s) | not run |
-
-Clef figures: 65-example eval run through a local `wrangler dev` Worker with the remote Workers AI binding, 18 Nov 2026; latency is `POST /api/decide` (classify and pick in parallel) timed from the same machine, so it excludes the browser hop and the first call after a login, which was slow. The mock column is not a quality figure. It shows what the keyword backstop catches with no model behind it.
-
-See [DECISIONS.md](DECISIONS.md) for defaults taken and departures from the brief.
+See [DECISIONS.md](DECISIONS.md) for defaults and departures from the brief.
