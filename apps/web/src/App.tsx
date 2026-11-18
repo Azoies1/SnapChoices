@@ -49,6 +49,7 @@ function inputOf(decision: Decision): DecisionInput {
     ...(decision.clarifier
       ? { clarifier: { question: decision.clarifier.question, chosen: decision.clarifier.chosen } }
       : {}),
+    ...(decision.nudges?.length ? { nudges: decision.nudges.map((n) => n.text) } : {}),
   };
 }
 
@@ -70,6 +71,7 @@ export default function App() {
   const [decision, setDecision] = useState<Decision | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [reasonState, setReasonState] = useState<ReasonState>("idle");
+  const [nudgeState, setNudgeState] = useState<ReasonState>("idle");
   const [gateQuestions, setGateQuestions] = useState<string[] | null>(null);
   /** Bumped whenever a flow starts or is abandoned, so late responses are dropped. */
   const run = useRef(0);
@@ -175,6 +177,7 @@ export default function App() {
     const token = ++run.current;
     setDecision(record);
     setReasonState("idle");
+    setNudgeState("idle");
     setGateQuestions(null);
     setView({ name: "loading" });
 
@@ -231,6 +234,31 @@ export default function App() {
     setDecision(picked);
     setView({ name: "pick" });
     void why(picked);
+  }
+
+  /** After a pick: the user adds something, and the same options are ranked again with it. */
+  async function nudge(text: string) {
+    const before = decision;
+    if (!before?.pick || !before.probabilities) return;
+    const nudges = [...(before.nudges ?? []), { text, probabilities: before.probabilities, pick: before.pick }];
+    const token = ++run.current;
+    setNudgeState("loading");
+
+    const decided = await settle(api.decide(inputOf({ ...before, nudges })));
+    if (token !== run.current) return;
+    if (!decided.ok) {
+      setNudgeState("idle");
+      // A refusal still wins: a nudge can raise the tier to gated or reveal a crisis.
+      if (decided.error instanceof ApiError && decided.error.status === 422) return fail(decided.error, before);
+      setNudgeState("error");
+      return;
+    }
+    const picked: Decision = { ...withPick(before, decided.value, decided.ms), nudges };
+    delete picked.reason; // The old reason argued for the old pick.
+    setDecision(picked);
+    setReasonState("idle");
+    setNudgeState("idle");
+    if (picked.tier !== "small") void why(picked);
   }
 
   async function why(current: Decision | null = decision) {
@@ -319,6 +347,8 @@ export default function App() {
         <Pick
           decision={decision}
           reasonState={reasonState}
+          nudgeState={nudgeState}
+          onNudge={(text) => void nudge(text)}
           onAccept={() => finish("accepted", decision.pick)}
           onWhy={() => void why()}
           onReject={() => setView({ name: "switch" })}

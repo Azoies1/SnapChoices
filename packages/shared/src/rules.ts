@@ -4,6 +4,9 @@ export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 4;
 export const MAX_OPTION_LENGTH = 80;
 export const MAX_CONTEXT_LENGTH = 200;
+/** Follow-up nudges after a pick: how many, and how long each may be. */
+export const MAX_NUDGES = 3;
+export const MAX_NUDGE_LENGTH = 200;
 
 /** Top two within this many percentage points is a close call. */
 export const CLOSE_CALL_POINTS = 10;

@@ -43,17 +43,18 @@ function usable(n: unknown): n is number {
  * and takes priority over the tier.
  */
 export async function classify(provider: DecisionProvider, input: DecisionInput): Promise<ClassifyResponse> {
-  // Backstops read everything the user typed, including a clarifying answer.
+  // Backstops read everything the user typed, including a clarifying answer and any nudges.
   const everything = [
     ...input.options,
     input.context ?? "",
     input.clarifier?.question ?? "",
     input.clarifier?.chosen ?? "",
+    ...(input.nudges ?? []),
   ].join("\n");
 
   if (matchesCrisisKeyword(everything)) return { tier: "gated", crisis: true };
 
-  // The model sees only the options and context, so a clarifying answer cannot talk it down a tier.
+  // The model sees only the options and context, so a clarifying answer or a nudge cannot talk it down a tier.
   const state = buildState({ options: input.options, ...(input.context ? { context: input.context } : {}) });
 
   let answers;

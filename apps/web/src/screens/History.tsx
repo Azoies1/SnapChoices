@@ -89,6 +89,16 @@ export function History({ onBack }: { onBack: () => void }) {
                 </span>
               </div>
               <p className="pt-1 break-words text-sm text-mute">{decision.options.join(" · ")}</p>
+              {decision.clarifier ? (
+                <p className="pt-1 break-words text-sm text-mute">
+                  {decision.clarifier.question} {decision.clarifier.chosen}
+                </p>
+              ) : null}
+              {decision.nudges?.length ? (
+                <p data-testid="history-nudges" className="pt-1 break-words text-sm text-mute">
+                  {decision.nudges.map((n) => `“${n.text}”`).join(" · ")}
+                </p>
+              ) : null}
               <p className="pt-2 text-sm text-mute">
                 {when(decision.createdAt)}
                 {decision.reaction === "switched" ? " · Switched from the pick" : ""}

@@ -28,6 +28,7 @@ Each default taken and each place the build departs from the brief, with the rea
 | Regret timing | 20 hours counted from `resolvedAt`; the most recently resolved eligible decision is asked about | The brief says "more than 20 hours old" without naming the timestamp. |
 | Delete all | Two taps: the button turns into "Tap again to delete everything" | It cannot be undone. |
 | Reason for medium and big | Fetched as soon as the pick is shown and filled in when it arrives; "Why?" stays as a retry if it fails | The pick is not held up by the slower text call. |
+| Nudges after a pick | Up to 3 free-text follow-ups of 200 characters each re-run `/api/decide` with the same options. The keyword backstops read them; the tier model never sees them; a refusal still wins. Each saved nudge keeps the pick and ranking it pushed against | Lets a user steer a pick without restarting, and records what changed their mind for later personalisation. Same rule as the clarifier, so a nudge cannot talk a decision down a tier. |
 
 ## Departures from the brief
 

@@ -29,6 +29,11 @@ export type Decision = {
   tier: Tier;
   crisis: boolean;
   clarifier?: { question: string; answers: string[]; chosen: string };
+  /**
+   * What the user added after a pick, oldest first. Each keeps the pick and ranking it pushed
+   * against, so the path is nudges[*].pick then the top-level pick, which is always the latest.
+   */
+  nudges?: { text: string; probabilities: Record<string, number>; pick: string }[];
   probabilities?: Record<string, number>;
   pick?: string;
   runnerUp?: string;
@@ -48,6 +53,8 @@ export type DecisionInput = {
   options: string[];
   context?: string;
   clarifier?: { question: string; chosen: string };
+  /** Follow-ups typed after a pick, oldest first. */
+  nudges?: string[];
 };
 
 export type ClassifyResponse = { tier: Tier; crisis: boolean };

@@ -1,4 +1,10 @@
-import { MAX_CONTEXT_LENGTH, validateOptions, type DecisionInput } from "@snap/shared";
+import {
+  MAX_CONTEXT_LENGTH,
+  MAX_NUDGES,
+  MAX_NUDGE_LENGTH,
+  validateOptions,
+  type DecisionInput,
+} from "@snap/shared";
 
 export type ParseResult =
   | { ok: true; input: DecisionInput }
@@ -48,6 +54,22 @@ export function parseInput(body: unknown): ParseResult {
     input.clarifier = { question: c.question.trim(), chosen: c.chosen.trim() };
   }
 
+  if (body.nudges !== undefined && body.nudges !== null) {
+    const n: unknown = body.nudges;
+    if (
+      !Array.isArray(n) ||
+      n.length > MAX_NUDGES ||
+      n.some((x) => typeof x !== "string" || !x.trim() || x.length > MAX_NUDGE_LENGTH)
+    ) {
+      return {
+        ok: false,
+        error: "invalid_nudges",
+        message: `Up to ${MAX_NUDGES} follow-ups, each under ${MAX_NUDGE_LENGTH} characters.`,
+      };
+    }
+    if (n.length) input.nudges = (n as string[]).map((x) => x.trim());
+  }
+
   return { ok: true, input };
 }
 
@@ -61,5 +83,6 @@ export function buildState(input: DecisionInput): string {
   if (input.clarifier) {
     lines.push(`Asked "${input.clarifier.question}", they answered: ${input.clarifier.chosen}`);
   }
+  for (const nudge of input.nudges ?? []) lines.push(`After seeing a pick, they added: ${nudge}`);
   return lines.join("\n");
 }
