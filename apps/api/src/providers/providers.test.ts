@@ -6,17 +6,9 @@ import { clefProvider } from "./clef";
 import { decisionProviders, getDecisionProvider } from "./index";
 import { geminiProvider } from "./gemini";
 import { jevProvider } from "./jev";
-import { CLEF_FROM_SCHEMA, JEV_RECORDED } from "./systemOne/fixtures";
-import {
-  ProviderError,
-  aiBindingTransport,
-  cloudflareRestTransport,
-  createSystemOneProvider,
-  geminiTransport,
-  httpSystemOneProvider,
-  httpTransport,
-  type Transport,
-} from "./systemOne";
+import { ProviderError } from "./errors";
+import { CLEF_FROM_SCHEMA, JEV_RECORDED } from "./fixtures";
+import { letsDecideProvider, requireHttps } from "./letsdecide";
 
 const crisis: Question = { id: "crisis", kind: "yesno", text: "Harm?" };
 const pick: Question = { id: "pick", kind: "choice", text: "Which?", options: ["pizza", "sushi"] };
@@ -45,88 +37,94 @@ const codeOf = async (p: Promise<unknown> | (() => unknown)) => {
   return "none";
 };
 
-describe("createSystemOneProvider", () => {
-  it("encodes, calls the transport once and decodes", async () => {
-    const transport = vi.fn<Transport>(async () => CLEF_FROM_SCHEMA);
-    const provider = createSystemOneProvider({ name: "x", model: "clef-flash", transport });
+describe("letsDecideProvider", () => {
+  const fakeFetch = (body: unknown, status = 200) => vi.fn<typeof globalThis.fetch>(async () => json(body, status));
+
+  it("encodes through letsdecide, calls fetch once and decodes", async () => {
+    const fetch = fakeFetch(CLEF_FROM_SCHEMA);
+    const provider = letsDecideProvider({ name: "x", model: "jev/jev-latest", byProvider: { jev: { apiKey: "k" } }, fetch });
     const answers = await provider.decide("a state", [crisis, pick]);
-    expect(transport).toHaveBeenCalledTimes(1);
-    expect(transport.mock.calls[0]![0]).toMatchObject({ model: "clef-flash", state: "a state" });
-    expect(answers.map((a) => a.id)).toEqual(["crisis", "pick"]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(JSON.parse(init.body as string)).toEqual({
+      model: "jev-latest",
+      state: "a state",
+      questions: {
+        crisis: { type: "noul", instructions: "Harm?" },
+        pick: { type: "choice", instructions: "Which?", criteria: { pizza: "", sushi: "" } },
+      },
+    });
+    expect(answers).toEqual([
+      { id: "crisis", probabilities: { yes: 0.02, no: 0.98 } },
+      { id: "pick", probabilities: { pizza: 0.4, sushi: 0.6 } },
+    ]);
+  });
+
+  it("sends free-text options under positional ids and maps the answer back to the text", async () => {
+    const fetch = fakeFetch({ answers: { pick: { type: "choice", choice: "o1", probabilities: { o0: 0.25, o1: 0.75 } } } });
+    const provider = letsDecideProvider({ name: "x", model: "jev/m", byProvider: { jev: { apiKey: "k" } }, fetch });
+    const q: Question = { id: "pick", kind: "choice", text: "Which?", options: ["Thai place", "Pizza!"] };
+    const answers = await provider.decide("s", [q]);
+    const body = JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.questions.pick.criteria).toEqual({ o0: "Thai place", o1: "Pizza!" });
+    expect(answers).toEqual([{ id: "pick", probabilities: { "Thai place": 0.25, "Pizza!": 0.75 } }]);
+  });
+
+  it("treats a skipped answer as malformed, so the caller fails closed", async () => {
+    const fetch = fakeFetch({ answers: { crisis: { type: "noul", noul: 0.1 } } });
+    const provider = letsDecideProvider({ name: "x", model: "jev/m", byProvider: { jev: { apiKey: "k" } }, fetch });
+    expect(await codeOf(provider.decide("s", [crisis, pick]))).toBe("malformed");
+  });
+
+  it("rejects an out-of-range probability as malformed", async () => {
+    const fetch = fakeFetch({ answers: { crisis: { type: "noul", noul: 7 } } });
+    const provider = letsDecideProvider({ name: "x", model: "jev/m", byProvider: { jev: { apiKey: "k" } }, fetch });
+    expect(await codeOf(provider.decide("s", [crisis]))).toBe("malformed");
+  });
+
+  it("maps http failures to generic errors", async () => {
+    const make = (status: number) =>
+      letsDecideProvider({ name: "x", model: "jev/m", byProvider: { jev: { apiKey: "k" } }, fetch: fakeFetch({}, status) });
+    expect(await codeOf(make(500).decide("s", [pick]))).toBe("http");
+    expect(await codeOf(make(401).decide("s", [pick]))).toBe("config");
   });
 
   it("times out, aborts the request, and reports a generic timeout", async () => {
     let aborted = false;
-    const transport: Transport = (_req, signal) =>
-      new Promise((_, reject) => signal.addEventListener("abort", () => ((aborted = true), reject(new Error("x")))));
-    const provider = createSystemOneProvider({ name: "x", model: "m", transport, timeoutMs: 20 });
+    const fetch = ((_url: string, init: RequestInit) =>
+      new Promise((_, reject) =>
+        init.signal!.addEventListener("abort", () => ((aborted = true), reject(new Error("x")))),
+      )) as unknown as typeof globalThis.fetch;
+    const provider = letsDecideProvider({ name: "x", model: "jev/m", byProvider: { jev: { apiKey: "k" } }, fetch, timeoutMs: 50 });
     expect(await codeOf(provider.decide("s", [pick]))).toBe("timeout");
     expect(aborted).toBe(true);
   });
 
-  it("wraps a transport crash so no raw error text escapes", async () => {
-    const transport: Transport = async () => {
+  it("wraps a fetch crash so no raw error text escapes", async () => {
+    const fetch = (async () => {
       throw new Error("secret user text: pizza");
-    };
-    const provider = createSystemOneProvider({ name: "x", model: "m", transport });
+    }) as unknown as typeof globalThis.fetch;
+    const provider = letsDecideProvider({ name: "x", model: "jev/m", byProvider: { jev: { apiKey: "k" } }, fetch });
     const error = await provider.decide("s", [pick]).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ProviderError);
     expect((error as ProviderError).message).not.toContain("pizza");
   });
-});
 
-describe("transports", () => {
-  it("aiBindingTransport runs the model path with the request body", async () => {
-    const run = vi.fn(async () => CLEF_FROM_SCHEMA);
-    const transport = aiBindingTransport({ run }, "@cf/cloudflare/clef-flash");
-    const request = { model: "clef-flash", state: "s", questions: {} };
-    expect(await transport(request, new AbortController().signal)).toBe(CLEF_FROM_SCHEMA);
-    expect(run).toHaveBeenCalledWith("@cf/cloudflare/clef-flash", request);
+  it("refuses bad questions before sending", async () => {
+    const fetch = fakeFetch(CLEF_FROM_SCHEMA);
+    const provider = letsDecideProvider({ name: "x", model: "jev/m", byProvider: { jev: { apiKey: "k" } }, fetch });
+    expect(await codeOf(provider.decide("s", []))).toBe("request");
+    expect(await codeOf(provider.decide("s", [{ ...pick, options: ["a", "a"] }]))).toBe("request");
+    expect(await codeOf(provider.decide("s", [{ ...pick, id: "Bad Id" }]))).toBe("request");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("cloudflareRestTransport posts to the account's run endpoint and unwraps `result`", async () => {
-    const fetch = vi.fn(async () => json({ success: true, errors: [], result: CLEF_FROM_SCHEMA }));
-    const transport = cloudflareRestTransport({
-      accountId: "acct",
-      apiToken: "tok",
-      modelPath: "@cf/cloudflare/clef-flash",
-      fetch,
-    });
-    const result = await transport({ model: "clef-flash", state: "s", questions: {} }, new AbortController().signal);
-    expect(result).toEqual(CLEF_FROM_SCHEMA);
-    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef-flash");
-    expect((init.headers as Record<string, string>).authorization).toBe("Bearer tok");
-    expect(JSON.parse(init.body as string)).toMatchObject({ model: "clef-flash" });
-  });
-
-  it("cloudflareRestTransport reports an unsuccessful envelope as an http error", async () => {
-    const signal = new AbortController().signal;
-    const mk = (res: () => Response) =>
-      cloudflareRestTransport({ accountId: "a", apiToken: "t", modelPath: "m", fetch: async () => res() });
-    const request = { model: "m", state: "s", questions: {} };
-    expect(await codeOf(mk(() => json({ success: false, errors: [{ message: "nope" }] }, 200))(request, signal))).toBe("http");
-    expect(await codeOf(mk(() => json({ success: false }, 401))(request, signal))).toBe("http");
-  });
-
-  it("httpTransport sends a bearer key and maps failures to generic errors", async () => {
-    const signal = new AbortController().signal;
-    const request = { model: "m", state: "s", questions: {} };
-    const fetch = vi.fn(async () => json(JEV_RECORDED));
-    expect(await httpTransport({ url: "https://h.test/x", apiKey: "k", fetch })(request, signal)).toEqual(JEV_RECORDED);
-    const init = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect((init.headers as Record<string, string>).authorization).toBe("Bearer k");
-
-    expect(await codeOf(httpTransport({ url: "https://h.test", apiKey: "k", fetch: async () => json({}, 500) })(request, signal))).toBe("http");
-    expect(await codeOf(httpTransport({ url: "https://h.test", apiKey: "k", fetch: async () => new Response("<html>") })(request, signal))).toBe("malformed");
-  });
-
-  it("httpSystemOneProvider refuses a key over plain http, except locally", () => {
-    const make = (url: string) => () => httpSystemOneProvider({ name: "x", url, apiKey: "k", model: "m" });
-    expect(make("http://example.com/v1")).toThrow(ProviderError);
-    expect(make("not a url")).toThrow(ProviderError);
-    expect(make("https://example.com/v1")).not.toThrow();
-    expect(make("http://localhost:9000/v1")).not.toThrow();
+  it("requireHttps refuses a key over plain http, except locally", () => {
+    expect(() => requireHttps("x", "http://example.com/v1")).toThrow(ProviderError);
+    expect(() => requireHttps("x", "not a url")).toThrow(ProviderError);
+    expect(() => requireHttps("x", "https://example.com/v1")).not.toThrow();
+    expect(() => requireHttps("x", "http://localhost:9000/v1")).not.toThrow();
   });
 });
 
@@ -147,8 +145,33 @@ describe("clefProvider", () => {
     expect(run.calls[0]![1]).toMatchObject({ model: "clef" });
   });
 
-  it("falls back to REST outside a Worker", () => {
-    expect(clefProvider({ CLOUDFLARE_ACCOUNT_ID: "a", CLOUDFLARE_API_TOKEN: "t" }).name).toBe("clef");
+  it("falls back to REST outside a Worker, unwrapping Cloudflare's envelope", async () => {
+    const real = globalThis.fetch;
+    let sent: [string, RequestInit] | undefined;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      sent = [url, init];
+      return json({ success: true, errors: [], result: CLEF_FROM_SCHEMA });
+    }) as typeof fetch;
+    try {
+      const provider = clefProvider({ CLOUDFLARE_ACCOUNT_ID: "acct", CLOUDFLARE_API_TOKEN: "tok" });
+      const answers = await provider.decide("s", [crisis, pick]);
+      expect(answers.find((a) => a.id === "pick")!.probabilities).toEqual({ pizza: 0.4, sushi: 0.6 });
+    } finally {
+      globalThis.fetch = real;
+    }
+    expect(sent![0]).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef-flash");
+    expect((sent![1].headers as Record<string, string>).authorization).toBe("Bearer tok");
+  });
+
+  it("reports an unsuccessful REST envelope as an http error", async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async () => json({ success: false, errors: [{ message: "nope" }] }, 500)) as typeof fetch;
+    try {
+      const provider = clefProvider({ CLOUDFLARE_ACCOUNT_ID: "a", CLOUDFLARE_API_TOKEN: "t" });
+      expect(await codeOf(provider.decide("s", [pick]))).toBe("http");
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 
   it("explains what is missing, naming no secret values", () => {
@@ -223,8 +246,13 @@ describe("geminiProvider", () => {
   });
 
   it("maps an http failure to a generic error", async () => {
-    const transport = geminiTransport({ url: "https://h.test", apiKey: "k", fetch: async () => json({}, 400) });
-    expect(await codeOf(transport({ model: "m", state: "s", questions: {} }, new AbortController().signal))).toBe("http");
+    const real = globalThis.fetch;
+    globalThis.fetch = (async () => json({}, 503)) as typeof fetch;
+    try {
+      expect(await codeOf(geminiProvider({ GEMINI_API_KEY: "k" }).decide("s", [pick]))).toBe("http");
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 });
 
@@ -253,17 +281,18 @@ describe("registry", () => {
   });
 });
 
-describe("a System One provider inside the gate", () => {
-  /** A fake Clef that answers from a table keyed by question id. */
+describe("a letsdecide provider inside the gate", () => {
+  /** A fake Clef binding that answers from a table keyed by question id. */
   function fakeClef(answers: Record<string, unknown>): DecisionProvider {
-    return createSystemOneProvider({ name: "clef", model: "clef-flash", transport: async () => ({ answers }) });
+    return clefProvider({ AI: { run: async () => ({ answers }) } });
   }
-  const tierAnswer = (small: number, medium: number, big: number, gated: number) => ({
-    type: "choice",
-    probabilities: { small, medium, big, gated },
-  });
+  const tierAnswer = (small: number, medium: number, big: number, gated: number) => {
+    const probabilities = { small, medium, big, gated };
+    const choice = Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0]![0];
+    return { type: "choice", choice, probabilities };
+  };
 
-  it("classifies through the real codec", async () => {
+  it("classifies through letsdecide's codec", async () => {
     const provider = fakeClef({ crisis: { type: "noul", noul: 0.01 }, tier: tierAnswer(0.9, 0.05, 0.03, 0.02) });
     expect(await classify(provider, { options: ["pizza", "sushi"] })).toEqual({ tier: "small", crisis: false });
   });
@@ -279,16 +308,16 @@ describe("a System One provider inside the gate", () => {
     const gated = fakeClef({
       crisis: { type: "noul", noul: 0.01 },
       tier: tierAnswer(0.02, 0.03, 0.05, 0.9),
-      pick: { type: "choice", probabilities: { a: 0.8, b: 0.2 } },
+      pick: { type: "choice", choice: "a", probabilities: { a: 0.8, b: 0.2 } },
     });
     const refused = await post("/api/decide", { options: ["a", "b"], tier: "small" }, { decision: gated });
     expect(refused.status).toBe(422);
 
-    const down = createSystemOneProvider({
-      name: "clef",
-      model: "clef-flash",
-      transport: async () => {
-        throw new Error("offline");
+    const down = clefProvider({
+      AI: {
+        run: async () => {
+          throw new Error("offline");
+        },
       },
     });
     const failed = await post("/api/decide", { options: ["a", "b"] }, { decision: down });

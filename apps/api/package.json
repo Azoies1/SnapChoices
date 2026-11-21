@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@snap/shared": "workspace:*",
-    "hono": "^4.13.18"
+    "hono": "^4.13.18",
+    "letsdecide": "0.3.0"
   },
   "devDependencies": {
     "wrangler": "^4.161.0"

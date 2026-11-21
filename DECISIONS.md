@@ -64,16 +64,31 @@ Each default taken and each place the build departs from the brief, with the rea
 
 **Choosing a provider**
 
-- `DECISION_PROVIDER=mock | clef | jev`. The registry is `decisionProviders` in `apps/api/src/providers/index.ts`.
+- `DECISION_PROVIDER=mock | clef | jev | gemini`. The registry is `decisionProviders` in `apps/api/src/providers/index.ts`.
 - Clef inside a Worker uses the Workers AI binding (the `cloudflare` wrangler environment: `bun run --filter @snap/api dev:clef`). Outside a Worker, such as the eval script, it uses Cloudflare's REST API with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. `CLEF_MODEL` picks `clef-flash` (default) or `clef`.
 - Jev needs `JEV_API_KEY`. It defaults to TypeSafe's endpoint and model `jev-latest`; set `JEV_BASE_URL` and `JEV_MODEL` to go through a gateway such as OpenRouter.
 - The default model id `jev-latest` and the TypeSafe endpoint come from TypeSafe's quickstart. For classification that gates life decisions, **pin a dated version** (for example `jev-1.14`) once chosen, so a model update cannot change behaviour silently.
 
 **Adding another decision model**
 
-1. If it accepts the System One body over HTTPS with a bearer key (OpenAI's Decisions API is a likely candidate): write a factory that calls `httpSystemOneProvider({ name, url, apiKey, model })`, as `jev.ts` does.
-2. If its host works differently: write a `Transport` (a function from the request to parsed JSON) and pass it to `createSystemOneProvider`.
-3. If it speaks a different wire format: write a codec beside `systemOne/wire.ts` and a factory that returns a `DecisionProvider`.
+1. If `letsdecide` supports it (Jev, Clef, Gemini, OpenAI, any System One server): write a factory that calls `letsDecideProvider({ name, model: "<provider>/<model>", byProvider: { <provider>: { apiKey } } })`, as `gemini.ts` does.
+2. If it is a known body at another URL (a gateway): describe it as a letsdecide dialect, as `jev.ts` does for `JEV_BASE_URL`.
+3. If its host is not plain HTTP (like the Workers AI binding): pass a `fetch` that delivers the request letsdecide built, as `clef.ts` does.
 4. List the factory in `decisionProviders`, add its variables to `env.ts`, and run `bun run eval`.
 
 Verified live: Clef-flash through the Workers AI binding (18 Nov 2026). All 20 gated and crisis eval examples received no pick, and tier accuracy on the other 45 was 41/45. Not yet verified live: Jev, the Clef REST transport, and the Clef response shape beyond what the eval exercised (the stored test response is still schema-derived). The first call after `wrangler login` took longer than the 8-second timeout and failed; later calls took 0.3 to 0.6 seconds. `PROVIDER_TIMEOUT_MS` and `DEBUG_PROVIDER_ERRORS` exist for diagnosing that kind of failure and are off by default.
+
+## Decision providers: on letsdecide (21 Nov 2026)
+
+The hand-written System One codec and its three transports (`providers/systemOne/`) are replaced by the published [`letsdecide`](https://www.npmjs.com/package/letsdecide) 0.3.0 library. It builds each provider's request and checks each reply; Snap keeps its own `DecisionProvider` interface, timeout, error codes and fail-closed rules on top (`providers/letsdecide.ts`).
+
+| Area | Choice | Reason |
+| --- | --- | --- |
+| Option ids | Options that are already valid ids (`[a-z0-9_]{1,64}`, such as the tier names) are sent as-is. Otherwise every option of that question is sent as `o0`, `o1`, ... with the user's text as its description, and the answer is mapped back to the text | letsdecide refuses free-text ids. This changes what the model sees for picks (before: the text was the key, with no description). Gemini was re-run on the full eval afterwards; **re-run Clef before relying on it** |
+| Skipped answers | Now a `malformed` error, not a dropped answer | letsdecide treats a missing answer as a bad response. Callers already failed closed on both, so no pick can result either way |
+| Clef inside a Worker | letsdecide builds the REST request; a `fetch` shim sends its body through the AI binding and wraps the reply in Cloudflare's envelope | One codec for both paths. The shim's account id and key are placeholders the binding never sees |
+| `JEV_BASE_URL` | Still the full endpoint URL; split into a letsdecide dialect (`extends: "jev"`, origin plus path) | Keeps existing settings working; letsdecide's own `baseUrl` is origin-only |
+| WASM in the Worker | `src/index.ts` imports the `.wasm` by relative path and hands it to the providers; Node (tests, eval) reads the bytes (`providers/wasmNode.ts`) | The package's `exports` map leaves the `.wasm` out and its default loader cannot fetch a file in workerd or Node |
+| `fetch` | Always wrapped: `(input, init) => globalThis.fetch(input, init)` | letsdecide 0.3.0 calls the stored `fetch` as a method, which workerd rejects as "Illegal invocation". Found with `wrangler dev`; fixed upstream on the LetsDecide branch, not yet released |
+
+Verified: the eval on Gemini Decision 1 through letsdecide, in-process (20/20 gated and crisis with no pick, tier 40/45), and a free-text pick (positional ids mapped back). Under `wrangler dev`, the Worker loads the WASM and reaches Google; the live call there could not be completed without a real key in `.dev.vars`. Not yet re-verified: Clef (binding and REST) after the move.

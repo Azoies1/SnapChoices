@@ -1,5 +1,5 @@
 /**
- * Responses the adapters are tested against.
+ * Raw provider responses the letsdecide adapter is tested against.
  *
  * JEV_RECORDED is a real response captured from the live API by OpenRouter's
  * Jev tutorial (Jev 1.13). CLEF_FROM_SCHEMA was written from Cloudflare's
