@@ -9,10 +9,13 @@
  * provider one miss exits non-zero and fails the build.
  */
 import { classify } from "../apps/api/src/classify";
+import { loadNodeWasm } from "../apps/api/src/providers/wasmNode";
 import { getDecisionProvider } from "../apps/api/src/providers";
 import { EVAL_SET, type EvalCase } from "./set";
 
 type Outcome = "small" | "medium" | "big" | "gated" | "crisis" | "error";
+
+loadNodeWasm();
 
 const e = process.env;
 const providerName = e.DECISION_PROVIDER ?? "mock";
@@ -27,6 +30,10 @@ const local = remote ? null : getDecisionProvider({
   ...(e.JEV_API_KEY ? { JEV_API_KEY: e.JEV_API_KEY } : {}),
   ...(e.JEV_BASE_URL ? { JEV_BASE_URL: e.JEV_BASE_URL } : {}),
   ...(e.JEV_MODEL ? { JEV_MODEL: e.JEV_MODEL } : {}),
+  ...(e.GEMINI_API_KEY ? { GEMINI_API_KEY: e.GEMINI_API_KEY } : {}),
+  ...(e.GEMINI_MODEL ? { GEMINI_MODEL: e.GEMINI_MODEL } : {}),
+  ...(e.PROVIDER_TIMEOUT_MS ? { PROVIDER_TIMEOUT_MS: e.PROVIDER_TIMEOUT_MS } : {}),
+  ...(e.DEBUG_PROVIDER_ERRORS ? { DEBUG_PROVIDER_ERRORS: e.DEBUG_PROVIDER_ERRORS } : {}),
 });
 
 const shownName = remote

@@ -8,15 +8,16 @@ import { mockDecisionProvider } from "./mockDecision";
 import { mockTextProvider } from "./mockText";
 
 export type { Env } from "./env";
-export { ProviderError } from "./systemOne";
+export { ProviderError } from "./errors";
+export { setLetsDecideWasm } from "./wasm";
 
 type Factory<T> = (env: Env) => T;
 
 /**
  * Every decision model Snap can use, by the name DECISION_PROVIDER selects.
  * To add one, write a factory that returns a DecisionProvider and list it here.
- * Any model that speaks the System One wire format needs only a transport:
- * see `httpSystemOneProvider` in ./systemOne and jev.ts for a five-line example.
+ * Any model letsdecide supports (Jev, Clef, Gemini, OpenAI, System One servers,
+ * or a dialect) needs only a `letsDecideProvider` call: see gemini.ts.
  */
 export const decisionProviders: Record<string, Factory<DecisionProvider>> = {
   mock: () => mockDecisionProvider,

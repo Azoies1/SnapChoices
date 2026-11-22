@@ -3,7 +3,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "vars": {
-    // mock | clef | jev. See decisionProviders in src/providers/index.ts.
+    // mock | clef | jev | gemini. See decisionProviders in src/providers/index.ts.
     "DECISION_PROVIDER": "mock",
     // mock for now. Claude Haiku joins in milestone 5.
     "TEXT_PROVIDER": "mock"

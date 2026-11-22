@@ -1,4 +1,5 @@
-import type { AiBinding } from "./systemOne";
+/** The one method of the Workers AI binding that Snap uses. */
+export type AiBinding = { run(model: string, input: unknown): Promise<unknown> };
 
 /** Bindings, variables and secrets. Everything is optional so the mock provider needs none. */
 export type Env = {
